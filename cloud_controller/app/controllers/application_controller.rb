@@ -71,7 +71,7 @@ class ApplicationController < ActionController::Base
     unless auth_token_header.blank?
       user_email = nil
       if uaa_enabled? && UaaToken.is_uaa_token?(auth_token_header)
-        user_email = UaaToken.decode_token(auth_token_header)
+        user_email = UaaToken.decode_email(auth_token_header)
       else
         token = UserToken.decode(auth_token_header)
         if token.valid?

@@ -22,6 +22,16 @@ class UaaToken
       token.nil? || /\s+/.match(token.strip()).nil?? false : true
     end
 
+    def decode_client(auth_token)
+      token_information = decode_token(auth_token)
+      token_information[:client_id] if token_information
+    end
+
+    def decode_email(auth_token)
+      token_information = decode_token(auth_token)
+      token_information[:email] if token_information
+    end
+
     def decode_token(auth_token)
       if (auth_token.nil?)
         return nil
@@ -37,7 +47,7 @@ class UaaToken
       rescue => e
         CloudController.logger.error("Invalid bearer token Message: #{e.message}")
       end
-      token_information[:email] if token_information
+      token_information
     end
 
     def expired?(access_token)

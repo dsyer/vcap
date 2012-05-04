@@ -1,3 +1,5 @@
+require 'digest/sha1'
+
 class Service < ActiveRecord::Base
   LABEL_REGEX = /^\S+-\S+$/
 
@@ -21,6 +23,11 @@ class Service < ActiveRecord::Base
 
   def self.active_services
     where("active = ?", true)
+  end
+
+  def token=(token)
+    token = Digest::SHA1.hexdigest(token) if UaaToken.is_uaa_token?(token)
+    self[:token] = token
   end
 
   def label=(label)
@@ -157,7 +164,12 @@ class Service < ActiveRecord::Base
     if is_builtin?
       (AppConfig[:builtin_services][self.name.to_sym][:token] == token)
     else
-      (self.token == token)
+      if UaaToken.is_uaa_token?(token)
+        client_id = UaaToken.decode_client(token) # actually it's an auth header
+        (client_id == self.name || client_id == self.label)
+      else
+        (self.token == Digest::SHA1.hexdigest(token)) or (AppConfig[:service_broker] and token == AppConfig[:service_broker][:token])
+      end
     end
   end
 

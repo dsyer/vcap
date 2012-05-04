@@ -1,5 +1,6 @@
 require 'json_message'
 require 'services/api'
+require 'digest/sha1'
 
 # TODO(mjp): Split these into separate controllers (user facing vs gateway facing, along with tests)
 
@@ -32,7 +33,7 @@ class ServicesController < ApplicationController
       attrs = req.extract.dup
       attrs.delete(:label)
       # Keep DB in sync with configs if the token changes in the config
-      attrs[:token] = @service_auth_token if svc.is_builtin?
+      attrs[:token] = @service_auth_token
       # Special support for changing a service offering's ACLs from
       # private to public. The call to ServiceOfferingRequest.decode
       # (actually, JsonMessage.from_decoded_json) discards keys with
@@ -51,14 +52,15 @@ class ServicesController < ApplicationController
       # register with us to get a token.
       # or, it's a brokered service
       svc = Service.new(req.extract)
-      if AppConfig[:service_broker] and @service_auth_token == AppConfig[:service_broker][:token] and !svc.is_builtin?
-        attrs = req.extract.dup
-        attrs[:token] = @service_auth_token
-        svc.update_attributes!(attrs)
-      else
-        raise CloudError.new(CloudError::FORBIDDEN) unless svc.is_builtin? && svc.verify_auth_token(@service_auth_token)
+      if svc.is_builtin?
+        raise CloudError.new(CloudError::FORBIDDEN) unless svc.verify_auth_token(@service_auth_token)
         svc.token = @service_auth_token
         svc.save!
+      else
+        attrs = req.extract.dup
+        attrs[:token] = @service_auth_token # has to be non-null
+        raise CloudError.new(CloudError::FORBIDDEN) unless svc.verify_auth_token(@service_auth_token)
+        svc.update_attributes!(attrs)
       end
     end
 
@@ -389,6 +391,7 @@ class ServicesController < ApplicationController
   def require_service_auth_token
     hdr = VCAP::Services::Api::GATEWAY_TOKEN_HEADER.upcase.gsub(/-/, '_')
     @service_auth_token = request.headers[hdr]
+    @service_auth_token ||= request.headers['Authorization']
     raise CloudError.new(CloudError::FORBIDDEN) unless @service_auth_token
   end
 
